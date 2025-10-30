@@ -11,6 +11,8 @@ try:
     from placement_mod import PlacementModule
     from project_skill_mod import ProjectSkillModule
     from application_mod import ApplicationModule
+    # ADD THE NEW ANALYTICS MODULE
+    from analytics_mod import AnalyticsModule
 except ImportError as e:
     print(f"Error importing modules: {e}. Check if db_connector.py and modules.py exist.")
     sys.exit()
@@ -41,7 +43,8 @@ class PortfolioManagerApp(ctk.CTk):
             "Student Management": StudentModule,
             "Placement & Hiring": PlacementModule,
             "Project & Skill Catalog": ProjectSkillModule,
-            "Application Tracking": ApplicationModule
+            "Application Tracking": ApplicationModule,
+            "Analytics & Reports": AnalyticsModule  # ADD THIS LINE
         }
         self.current_frame = None
         self.nav_buttons = {} 
