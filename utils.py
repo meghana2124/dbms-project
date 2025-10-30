@@ -14,9 +14,13 @@ def fetch_table_data(conn, table_name):
     cursor = None
     try:
         # Simple check to prevent basic SQL injection risk on table name
-        if not table_name.isalnum() and "_" not in table_name:
-             raise ValueError("Invalid table name.")
-             
+        # if not table_name.isalnum() and "_" not in table_name:
+        #      raise ValueError("Invalid table name.")
+        
+        # Robust check to ensure table name is valid (alphanumeric + underscore)
+        if not table_name or not all(char.isalnum() or char == '_' for char in table_name):
+            raise ValueError("Invalid table name.")  
+         
         cursor = conn.cursor()
         query = f"SELECT * FROM {table_name}"
         cursor.execute(query)

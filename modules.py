@@ -2,6 +2,7 @@
 import customtkinter as ctk
 from tkinter import ttk, messagebox
 import sys
+import mysql.connector
 
 # Import functions from utils and db_connector
 try:
@@ -102,7 +103,7 @@ class RecordForm(ctk.CTkToplevel):
                 return
 
             columns.append(col_name)
-            values.append(value if value else None)
+            values.append(value if value != "" else None)
             placeholders.append("%s")
         
         if not columns:
@@ -177,9 +178,9 @@ class DataTableFrame(ctk.CTkFrame):
         # --- Treeview Setup ---
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("Treeview", background="#3A465A", foreground="white", rowheight=25, fieldbackground="#3A465A")
+        style.configure("Treeview", background="#3A465A", foreground="white", rowheight=35, fieldbackground="#3A465A",font=('Arial', 11))
         style.map('Treeview', background=[('selected', '#00AEEF')])
-        style.configure("Treeview.Heading", font=('Arial', 10, 'bold'), background="#4A566A", foreground="white")
+        style.configure("Treeview.Heading", font=('Arial', 20, 'bold'), background="#4A566A", foreground="white")
         
         self.tree = ttk.Treeview(self)
         self.tree.pack(padx=10, pady=(0, 10), fill='both', expand=True)
@@ -192,6 +193,11 @@ class DataTableFrame(ctk.CTkFrame):
     def read_data(self):
         # ... (Read logic remains the same, using fetch_table_data) ...
         table_name = self.table_name_var.get()
+        # --- THIS IS THE FIX ---
+        # If the trace fires with an empty string (during init), just stop.
+        if not table_name:
+            return 
+        # --- END OF FIX ---
         self.tree.delete(*self.tree.get_children())
         self.tree.configure(columns=()) 
         headers, data = fetch_table_data(self.conn, table_name)

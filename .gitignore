@@ -1,0 +1,28 @@
+# --- .gitignore ---
+
+# 1. Python specific files/directories
+# Byte-compiled/optimized files
+__pycache__/
+*.pyc
+
+# Temporary files created by various IDEs/Editors
+*~
+*.swp
+*.bak
+
+# Virtual environment directory (common practice, even if not shown)
+venv/
+env/
+
+# 2. Database/Local Config
+# Ignore credentials/database connection details (if they were stored in a separate file)
+# Since you embed config in db_connector.py, we only ignore temporary DB files
+*.sql.log
+
+# 3. Custom/Temporary Files
+# Ignore temporary file from your screenshot
+tempCodeRunnerFile.py
+
+# 4. Customtkinter/GUI specifics
+# Often, CustomTkinter creates temporary logs or data stores; keep this general
+*.log

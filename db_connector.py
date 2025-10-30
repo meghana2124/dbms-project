@@ -4,7 +4,7 @@ from tkinter import messagebox
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'root',
-    'password': 'qwer4321',
+    'password': 'Sharsql@2025',
     'port': '3306',
     'database': 'student_skill_portfolio'
 }
