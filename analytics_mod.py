@@ -26,6 +26,7 @@ class AnalyticsModule(ctk.CTkFrame):
         self.tab_view.pack(padx=20, pady=(0, 20), fill="both", expand=True)
 
         # Create a tab for each logical procedure
+        self.tab_view.add("Application Inbox")    # NEW: For Officer Workflow
         self.tab_view.add("Find Candidates")      # FindEligibleStudents
         self.tab_view.add("Recommend Jobs")       # RecommendJobs
         self.tab_view.add("Student Profile")      # GetStudentProfile
@@ -35,13 +36,18 @@ class AnalyticsModule(ctk.CTkFrame):
         # Dictionaries to store student/job data for comboboxes
         self.student_map = {}
         self.job_map = {}
+        self.officer_map = {} # NEW
         
         # Setup each tab
+        self._setup_inbox_tab(self.tab_view.tab("Application Inbox")) # NEW
         self._setup_find_candidates_tab(self.tab_view.tab("Find Candidates"))
         self._setup_recommend_jobs_tab(self.tab_view.tab("Recommend Jobs"))
         self._setup_student_profile_tab(self.tab_view.tab("Student Profile"))
         self._setup_skill_match_tab(self.tab_view.tab("Skill Match %"))
         self._setup_placement_analytics_tab(self.tab_view.tab("Placement Analytics"))
+        
+        # Set default tab to the new one
+        self.tab_view.set("Application Inbox")
         
     # --- Data Fetching Helpers ---
     
@@ -56,6 +62,12 @@ class AnalyticsModule(ctk.CTkFrame):
         _, data = fetch_table_data(self.conn, 'JobRole')
         self.job_map = {f"{row[1]} (ID: {row[0]})": row[0] for row in data}
         return list(self.job_map.keys())
+
+    def _fetch_officers(self): # NEW HELPER
+        """Fetches 'id' and 'name' for officer comboboxes."""
+        _, data = fetch_table_data(self.conn, 'PlacementOfficer')
+        self.officer_map = {f"{row[1]} (ID: {row[0]})": row[0] for row in data}
+        return list(self.officer_map.keys())
 
     def _setup_treeview(self, parent_tab):
         """Creates a standardized, styled Treeview for results."""
@@ -107,6 +119,85 @@ class AnalyticsModule(ctk.CTkFrame):
             messagebox.showerror("Database Error", f"Error running procedure {proc_name}: {err}")
         finally:
             cursor.close()
+
+    # --- Tab 0: Application Inbox (NEW) ---
+    def _setup_inbox_tab(self, tab):
+        # Frame for selecting the officer
+        control_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        control_frame.pack(pady=10, padx=10, fill='x')
+
+        ctk.CTkLabel(control_frame, text="Select Placement Officer:").pack(side=ctk.LEFT, padx=10)
+        
+        officer_names = self._fetch_officers()
+        self.inbox_officer_var = ctk.StringVar(value=officer_names[0] if officer_names else "")
+        
+        officer_selector = ctk.CTkComboBox(control_frame, variable=self.inbox_officer_var, values=officer_names, state="readonly", width=300)
+        officer_selector.pack(side=ctk.LEFT, padx=10)
+        
+        ctk.CTkButton(control_frame, text="Load Inbox", 
+                      command=self._load_officer_inbox,
+                      fg_color="#00AEEF", hover_color="#0080B0").pack(side=ctk.LEFT, padx=10)
+        
+        # Frame to hold the tree and buttons
+        main_inbox_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        main_inbox_frame.pack(fill='both', expand=True)
+        main_inbox_frame.columnconfigure(0, weight=1)
+        main_inbox_frame.rowconfigure(0, weight=1)
+        
+        # Treeview for pending applications
+        self.inbox_tree = self._setup_treeview(main_inbox_frame)
+        self.inbox_tree.grid(row=0, column=0, sticky='nsew', padx=10, pady=(0,10))
+        
+        # Frame for action buttons
+        action_frame = ctk.CTkFrame(main_inbox_frame, fg_color="transparent")
+        action_frame.grid(row=1, column=0, pady=5)
+        
+        ctk.CTkButton(action_frame, text="Approve Selected", 
+                      command=lambda: self._update_selected_application_status("Accepted"),
+                      fg_color="#4CAF50", hover_color="#388E3C").pack(side=ctk.LEFT, padx=10)
+                      
+        ctk.CTkButton(action_frame, text="Reject Selected", 
+                      command=lambda: self._update_selected_application_status("Rejected"),
+                      fg_color="#A33A3A", hover_color="#802A2A").pack(side=ctk.LEFT, padx=10)
+
+    def _load_officer_inbox(self):
+        officer_name = self.inbox_officer_var.get()
+        if not officer_name:
+            messagebox.showwarning("Input Error", "Please select a placement officer.")
+            return
+        
+        officer_id = self.officer_map.get(officer_name)
+        self._run_procedure_to_tree('GetOfficerPendingApplications', (officer_id,), self.inbox_tree)
+
+    def _update_selected_application_status(self, new_status):
+        selected_item = self.inbox_tree.focus()
+        if not selected_item:
+            messagebox.showwarning("Warning", "Please select an application from the inbox to update.")
+            return
+
+        try:
+            # Get data from the selected row
+            selected_data = self.inbox_tree.item(selected_item, 'values')
+            app_id = selected_data[0] # Assuming app_id is the first column
+            
+            # Call the update procedure
+            cursor = self.conn.cursor()
+            cursor.callproc('UpdateApplicationStatus', (app_id, new_status))
+            self.conn.commit()
+            
+            messagebox.showinfo("Success", f"Application ID {app_id} has been {new_status.lower()}.")
+            
+            # Refresh the inbox
+            self._load_officer_inbox()
+            
+        except mysql.connector.Error as err:
+            messagebox.showerror("Database Error", f"Failed to update status: {err}")
+            self.conn.rollback()
+        except Exception as e:
+            messagebox.showerror("Application Error", f"An error occurred: {e}")
+        finally:
+            if 'cursor' in locals() and cursor:
+                cursor.close()
 
     # --- Tab 1: Find Candidates (FindEligibleStudents) ---
     def _setup_find_candidates_tab(self, tab):
@@ -257,45 +348,43 @@ class AnalyticsModule(ctk.CTkFrame):
                       fg_color="#00AEEF", hover_color="#0080B0").pack(side=ctk.LEFT, padx=10)
 
     def _run_skill_match(self, student_var, job_var, result_label):
-            student_name = student_var.get()
-            job_name = job_var.get()
+        student_name = student_var.get()
+        job_name = job_var.get()
+        
+        if not student_name or not job_name:
+            messagebox.showwarning("Input Error", "Please select both a student and a job.")
+            return
+
+        student_id = self.student_map.get(student_name)
+        job_id = self.job_map.get(job_name)
+        
+        cursor = self.conn.cursor()
+        try:
+            # --- ROBUST METHOD ---
+            # 1. Call the procedure, assigning the OUT param to a session variable @p_match_pct
+            cursor.execute("CALL CalculateSkillMatch(%s, %s, @p_match_pct)", (student_id, job_id))
             
-            if not student_name or not job_name:
-                messagebox.showwarning("Input Error", "Please select both a student and a job.")
-                return
+            # 2. Commit the call (ensures the procedure executes)
+            self.conn.commit()
 
-            student_id = self.student_map.get(student_name)
-            job_id = self.job_map.get(job_name)
+            # 3. Select the value from the session variable
+            cursor.execute("SELECT @p_match_pct")
             
-            cursor = self.conn.cursor()
-            try:
-                # --- THIS IS THE NEW, MORE ROBUST METHOD ---
+            # 4. Fetch the result
+            result = cursor.fetchone()
+            
+            if result:
+                match_pct = result[0]
+                result_label.configure(text=f"Match Percentage: {match_pct}%")
+            else:
+                result_label.configure(text="Match Percentage: Error")
+            # --- END OF NEW METHOD ---
 
-                # 1. Call the procedure, assigning the OUT param to a session variable @p_match_pct
-                #    We pass (student_id, job_id) as args to cursor.execute
-                cursor.execute("CALL CalculateSkillMatch(%s, %s, @p_match_pct)", (student_id, job_id))
-                
-                # 2. Commit the call (ensures the procedure executes)
-                self.conn.commit()
-
-                # 3. Select the value from the session variable
-                cursor.execute("SELECT @p_match_pct")
-                
-                # 4. Fetch the result
-                result = cursor.fetchone()
-                
-                if result:
-                    match_pct = result[0]
-                    result_label.configure(text=f"Match Percentage: {match_pct}%")
-                else:
-                    result_label.configure(text="Match Percentage: Error")
-                # --- END OF NEW METHOD ---
-
-            except mysql.connector.Error as err:
-                messagebox.showerror("Database Error", f"Error running procedure CalculateSkillMatch: {err}")
-                self.conn.rollback() # Rollback on error
-            finally:
-                cursor.close()
+        except mysql.connector.Error as err:
+            messagebox.showerror("Database Error", f"Error running procedure CalculateSkillMatch: {err}")
+            self.conn.rollback() # Rollback on error
+        finally:
+            cursor.close()
 
     # --- Tab 5: Placement Analytics (GetPlacementAnalytics) ---
     def _setup_placement_analytics_tab(self, tab):
