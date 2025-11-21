@@ -190,24 +190,72 @@ class DataTableFrame(ctk.CTkFrame):
         self.table_name_var.trace_add("write", lambda *args: self.read_data())
 
     # --- CRUD STUB METHODS (Require implementation) ---
+# --- REVISED DataTableFrame.read_data in modules.py ---
     def read_data(self):
-        # ... (Read logic remains the same, using fetch_table_data) ...
+        """Fetches and displays all data, adding calculated columns for Student table."""
         table_name = self.table_name_var.get()
-        # --- THIS IS THE FIX ---
-        # If the trace fires with an empty string (during init), just stop.
+        
+        # --- FIX 1: Prevents 'Invalid table name' error on module switch ---
         if not table_name:
             return 
-        # --- END OF FIX ---
+        
+        # Clear previous data
         self.tree.delete(*self.tree.get_children())
         self.tree.configure(columns=()) 
-        headers, data = fetch_table_data(self.conn, table_name)
-        if not headers:
-            self.tree["columns"] = ("Message",); self.tree.heading("Message", text=f"Could not load data for {table_name}."); return
+        
+        # Ensure utilities are available
+        try:
+            from utils import fetch_table_data
+        except ImportError:
+            messagebox.showerror("Error", "Missing utils.py dependency.")
+            return
 
+        headers, data = [], []
+
+        if table_name == 'Student':
+            # --- FIX 2: Corrected SQL Function Names ---
+            # This query now logically integrates all 4 of your SQL functions
+            sql_query = f"""
+                SELECT 
+                    s.student_id, 
+                    s.first_name, 
+                    s.last_name, 
+                    s.branch, 
+                    s.cgpa,
+                    CalculateAge(s.dob) AS Age, 
+                    GetStudentProjectCount(s.student_id) AS Total_Projects,
+                    GetStudentSkillCount(s.student_id) AS Total_Skills,
+                    GetStudentSuccessRate(s.student_id) AS Success_Rate,
+                    s.s_phone,
+                    s.degree,
+                    s.resume_link,
+                    s.dob
+                FROM Student s
+                ORDER BY s.student_id
+            """
+            headers, data = self._fetch_special_query(sql_query)
+            
+        else:
+            # --- Path for ALL OTHER Tables (Generic Fetch) ---
+            headers, data = fetch_table_data(self.conn, table_name)
+
+
+        if not headers:
+            # Fallback error display
+            self.tree["columns"] = ("Message",)
+            self.tree.heading("Message", text=f"Could not load data for {table_name}. (Check console for DB error.)")
+            self.tree.column("Message", width=400, anchor='center')
+            return
+
+        # --- Configuration and Population (Unchanged) ---
         self.tree["columns"] = headers
         self.tree["show"] = "headings"
         for col in headers:
-            self.tree.heading(col, text=col); self.tree.column(col, width=max(100, len(col) * 12), stretch=True) 
+            self.tree.heading(col, text=col)
+            # Auto-size columns
+            width = max(len(col) * 10, 100) # Base width on header
+            self.tree.column(col, width=width, stretch=True, anchor='w') 
+
         for row in data:
             self.tree.insert("", ctk.END, values=row)
 
@@ -352,3 +400,23 @@ class DataTableFrame(ctk.CTkFrame):
             messagebox.showerror("Error", f"Failed to prepare update form: {e}")
             
     # --- END of REPLACE update_record ---
+
+
+
+    # --- ADD this method INSIDE the DataTableFrame class in modules.py ---
+
+    def _fetch_special_query(self, sql_query):
+        """Helper function to fetch data for calculated columns using a specific SQL query."""
+        cursor = None
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(sql_query)
+            headers = [i[0] for i in cursor.description]
+            data = cursor.fetchall()
+            return headers, data
+        except mysql.connector.Error as err:
+            messagebox.showerror("Function Error", f"Failed to fetch data using functions: {err}")
+            return [], []
+        finally:
+            if cursor:
+                cursor.close()
