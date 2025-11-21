@@ -178,7 +178,7 @@ class DataTableFrame(ctk.CTkFrame):
         # --- Treeview Setup ---
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("Treeview", background="#3A465A", foreground="white", rowheight=35, fieldbackground="#3A465A",font=('Arial', 11))
+        style.configure("Treeview", background="#3A465A", foreground="white", rowheight=40, fieldbackground="#3A465A",font=('Arial', 14))
         style.map('Treeview', background=[('selected', '#00AEEF')])
         style.configure("Treeview.Heading", font=('Arial', 20, 'bold'), background="#4A566A", foreground="white")
         
