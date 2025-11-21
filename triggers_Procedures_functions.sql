@@ -1,4 +1,3 @@
--- ai
 
 USE student_skill_portfolio;
 -- Insert Students
